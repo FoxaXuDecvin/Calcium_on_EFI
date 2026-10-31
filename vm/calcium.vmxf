@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<Foundry>
+<VM>
+<VMId type="string">52 73 66 60 d4 09 d9 eb-aa cc d4 bc be 81 80 1d</VMId>
+<ClientMetaData>
+<clientMetaDataAttributes/>
+<HistoryEventList/></ClientMetaData>
+<vmxPathName type="string">calcium.vmx</vmxPathName></VM></Foundry>

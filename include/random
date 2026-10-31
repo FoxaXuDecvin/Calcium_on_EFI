@@ -1,0 +1,95 @@
+// ============================================================================
+//  <random> 影子实现 —— MT19937 + 均匀分布，够 Calcium 的 _get_random 用
+//  随机源：优先固件时间，退化为递增计数器
+// ============================================================================
+#pragma once
+
+#include "efi_core.h"
+
+namespace std {
+
+class random_device {
+public:
+    random_device() : ctr_(0x9E3779B9u) {}
+    unsigned int operator()()
+    {
+        EFI_TIME t;
+        unsigned int v = 0;
+        if (gRT && !EFI_ERROR(gRT->GetTime(&t, 0))) {
+            v = (unsigned int)(t.Nanosecond ^ ((unsigned int)t.Second << 16) ^ ((unsigned int)t.Minute << 8)
+                               ^ ((unsigned int)t.Day << 24) ^ ((unsigned int)t.Hour << 4));
+        }
+        ctr_ = ctr_ * 1664525u + 1013904223u;
+        return v ^ ctr_ ^ (unsigned int)efi_alloc(0);   // 混入分配器状态，增加熵
+    }
+    double entropy() const { return 32.0; }
+    static constexpr unsigned int min() { return 0u; }
+    static constexpr unsigned int max() { return 0xFFFFFFFFu; }
+
+private:
+    unsigned int ctr_;
+};
+
+class mt19937 {
+public:
+    using result_type = unsigned int;
+    static constexpr result_type min() { return 0u; }
+    static constexpr result_type max() { return 0xFFFFFFFFu; }
+
+    explicit mt19937(result_type seed = 5489u) { seed_(seed); }
+
+    void seed_(result_type s)
+    {
+        mt_[0] = s;
+        for (int i = 1; i < 624; i++) {
+            mt_[i] = (1812433253u * (mt_[i - 1] ^ (mt_[i - 1] >> 30)) + (result_type)i);
+        }
+        idx_ = 624;
+    }
+
+    result_type operator()()
+    {
+        if (idx_ >= 624) twist();
+        result_type y = mt_[idx_++];
+        y ^= (y >> 11);
+        y ^= (y << 7) & 0x9D2C5680u;
+        y ^= (y << 15) & 0xEFC60000u;
+        y ^= (y >> 18);
+        return y;
+    }
+
+private:
+    void twist()
+    {
+        for (int i = 0; i < 624; i++) {
+            result_type y = (mt_[i] & 0x80000000u) + (mt_[(i + 1) % 624] & 0x7FFFFFFFu);
+            mt_[i] = mt_[(i + 397) % 624] ^ (y >> 1);
+            if (y & 1u) mt_[i] ^= 0x9908B0DFu;
+        }
+        idx_ = 0;
+    }
+    result_type mt_[624];
+    int idx_ = 624;
+};
+
+template <class T = int>
+class uniform_int_distribution {
+public:
+    explicit uniform_int_distribution(T a = 0, T b = 1) : a_(a), b_(b) {}
+
+    template <class G>
+    T operator()(G &g)
+    {
+        unsigned long long lo = (unsigned long long)a_;
+        unsigned long long hi = (unsigned long long)b_;
+        if (hi <= lo) return a_;
+        unsigned long long span = hi - lo + 1ULL;
+        unsigned long long r = ((unsigned long long)g() << 32) ^ (unsigned long long)g();
+        return (T)(lo + (r % span));
+    }
+
+private:
+    T a_, b_;
+};
+
+} // namespace std

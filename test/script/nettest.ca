@@ -1,0 +1,15 @@
+_$directmode;
+_$nolog;
+_cout "=== NETTEST START ===";
+_file_del "net_test.bin";
+_var {R} = _url_get ("http://fdl-cds.dev.foxaxu.top/mediacreator/Geranium/catalog.cfg","net_test.bin");
+_cout "url_get returned: {R}";
+_if(_file_exist "net_test.bin")|_goto :HASFILE;
+_cout "RESULT: NO FILE";
+_goto :END;
+:HASFILE;
+_cout "RESULT: FILE EXISTS";
+_cout "-- first lines --";
+_typefile "net_test.bin";
+:END;
+_cout "=== NETTEST END ===";

@@ -1,0 +1,188 @@
+// ============================================================================
+//  <fstream> 影子实现
+//  策略：打开时整文件读入内存，写入时全部缓冲、close 时一次落盘。
+//  Calcium 用到的接口就这些：open/is_open/fail/eof/close/<<  /getline
+// ============================================================================
+#pragma once
+
+#include <iosfwd>
+#include <string>
+#include "efi_shim_common.h"
+
+namespace efi {
+
+struct openmode {
+    enum {
+        none   = 0,
+        in     = 0x01,
+        out    = 0x02,
+        binary = 0x04,
+        app    = 0x08,
+        ate    = 0x10,
+        trunc  = 0x20
+    };
+};
+
+// ---------------------------------------------------------------- 文件流
+class file_stream : public basic_stream {
+public:
+    file_stream()
+        : basic_stream(this, &file_stream::sink),
+          pos_(0), opened_(false), writable_(false), append_(false), ok_(false) {}
+
+    ~file_stream() { close(); }
+
+    static void sink(void *ctx, const char *s, size_t n)
+    {
+        static_cast<file_stream *>(ctx)->on_write(s, n);
+    }
+
+    void open(const char *path, int mode)
+    {
+        close();
+        path_ = path ? path : "";
+        writable_ = (mode & openmode::out) != 0;
+        append_   = (mode & openmode::app) != 0;
+        rbuf_.clear();
+        wbuf_.clear();
+        pos_ = 0;
+
+        if (writable_) {
+            // append 模式下 wbuf_ 只装新内容，close 时用 AppendAll 补到末尾，
+            // 不读原文件也不需要知道原长度
+            opened_ = true;
+            ok_ = true;
+        } else {
+            opened_ = file_read_all(path_.c_str(), rbuf_);
+            ok_ = opened_;
+        }
+    }
+
+    void open(const std::string &path, int mode) { open(path.c_str(), mode); }
+
+    bool is_open() const { return opened_; }
+    bool fail() const { return !ok_; }
+    bool good() const { return ok_; }
+    bool bad() const { return !ok_; }
+    bool eof() const { return pos_ >= rbuf_.size(); }
+    void clear() { ok_ = opened_; }
+
+    void close()
+    {
+        if (writable_ && opened_) do_flush();
+        opened_ = false;
+        writable_ = false;
+        append_ = false;
+        rbuf_.clear();
+        wbuf_.clear();
+        pos_ = 0;
+    }
+
+    // ---- 供 getline 用 ----
+    bool get_line(std::string &s, char delim = '\n')
+    {
+        s.clear();
+        if (pos_ >= rbuf_.size()) return false;
+        while (pos_ < rbuf_.size()) {
+            char c = rbuf_[pos_++];
+            if (c == delim) {
+                if (!s.empty() && s.back() == '\r') s.pop_back();
+                return true;
+            }
+            s.push_back(c);
+        }
+        if (!s.empty() && s.back() == '\r') s.pop_back();
+        return true;
+    }
+
+    bool read_to_end(std::string &s)
+    {
+        if (pos_ >= rbuf_.size()) return false;
+        s = rbuf_.substr(pos_);
+        pos_ = rbuf_.size();
+        return true;
+    }
+
+protected:
+    void on_write(const char *s, size_t n)
+    {
+        if (!writable_) {
+            // 对未以写方式打开的文件流做 << ：自动切成写模式
+            writable_ = true;
+            ok_ = true;
+            opened_ = true;
+        }
+        wbuf_.append(s, n);
+    }
+
+    void do_flush()
+    {
+        if (path_.empty()) return;
+        if (append_) file_append(path_.c_str(), wbuf_);
+        else file_write_all(path_.c_str(), wbuf_);
+    }
+
+    std::string path_;
+    std::string rbuf_;
+    std::string wbuf_;
+    size_t pos_;
+    bool opened_;
+    bool writable_;
+    bool append_;
+    bool ok_;
+};
+
+// ---------------------------------------------------------------- getline
+inline bool getline(file_stream &f, std::string &s) { return f.get_line(s, '\n'); }
+inline bool getline(file_stream &f, std::string &s, char d) { return f.get_line(s, d); }
+
+} // namespace efi
+
+// 让 `using namespace std;` 作用域下的 `ios::out` 成立
+#ifndef ios
+#define ios efi::openmode
+#endif
+
+namespace std {
+
+// 与 <iosfwd> 里的前向声明参数一致（默认实参在 iosfwd 已给，此处不能再给）
+template <class _Elem, class _Traits>
+class basic_ifstream : public efi::file_stream {
+public:
+    basic_ifstream() {}
+    explicit basic_ifstream(const char *p) { open(p); }
+    explicit basic_ifstream(const std::string &p) { open(p.c_str()); }
+
+    void open(const char *p) { efi::file_stream::open(p, efi::openmode::in); }
+    void open(const std::string &p) { open(p.c_str()); }
+    void open(const char *p, int m) { efi::file_stream::open(p, m); }
+    void open(const std::string &p, int m) { open(p.c_str(), m); }
+};
+
+template <class _Elem, class _Traits>
+class basic_ofstream : public efi::file_stream {
+public:
+    basic_ofstream() {}
+    explicit basic_ofstream(const char *p) { open(p); }
+    explicit basic_ofstream(const std::string &p) { open(p.c_str()); }
+
+    void open(const char *p) { efi::file_stream::open(p, efi::openmode::out); }
+    void open(const std::string &p) { open(p.c_str()); }
+    void open(const char *p, int m) { efi::file_stream::open(p, m); }
+    void open(const std::string &p, int m) { open(p.c_str(), m); }
+};
+
+template <class _Elem, class _Traits>
+class basic_fstream : public efi::file_stream {
+public:
+    basic_fstream() {}
+    explicit basic_fstream(const char *p) { open(p); }
+    explicit basic_fstream(const std::string &p) { open(p.c_str()); }
+
+    void open(const char *p) { efi::file_stream::open(p, efi::openmode::in); }
+    void open(const std::string &p) { open(p.c_str()); }
+    void open(const char *p, int m) { efi::file_stream::open(p, m); }
+    void open(const std::string &p, int m) { open(p.c_str(), m); }
+};
+
+} // namespace std

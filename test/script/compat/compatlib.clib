@@ -1,0 +1,6 @@
+_$directmode;
+_$nolog;
+_return "false";
+
+::GetName;
+_return "hello-from-clib";

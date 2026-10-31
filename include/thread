@@ -1,0 +1,52 @@
+// ============================================================================
+//  <thread> 影子实现 —— UEFI 无用户态线程，这里退化为「构造即同步执行」
+//  对 Calcium 的用法（spawn 一个任务后 join/detach）语义仍然成立：
+//  任务跑完才返回，主流程随后的等待循环会立即看到结束标志。
+// ============================================================================
+#pragma once
+
+#include "efi_core.h"
+
+// Calcium 的 _HeadMainLoad() 是在 std::thread::detach() 之后才把
+// __settings_throwErrorMode 置 false 的（= Windows 上脚本与这行并发）。
+// 我们是同步执行，脚本会在那行之前跑完，于是本应被抑制的
+// "----[ERROR](MESSAGE)" 诊断会全部冒出来（实测差异）。
+// 在构造时先关掉，语义与 Windows 一致。
+extern bool __settings_throwErrorMode;
+
+namespace std {
+
+class thread {
+public:
+    thread() : started_(false) {}
+
+    template <class F, class... Args>
+    explicit thread(F f, Args... args)
+    {
+        efi_trace("T");
+        __settings_throwErrorMode = false;
+        f(args...);          // 同步执行
+        started_ = true;
+    }
+
+    thread(const thread &) = delete;
+    thread &operator=(const thread &) = delete;
+
+    thread(thread &&o) : started_(o.started_) { o.started_ = false; }
+    thread &operator=(thread &&o) { started_ = o.started_; o.started_ = false; return *this; }
+
+    bool joinable() const { return false; }
+    void join() {}
+    void detach() {}
+    static unsigned int hardware_concurrency() { return 1; }
+
+private:
+    bool started_;
+};
+
+namespace this_thread {
+    inline void yield() {}
+    template <class R, class P> void sleep_for(const P &) {}
+}
+
+} // namespace std

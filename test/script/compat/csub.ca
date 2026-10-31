@@ -1,0 +1,7 @@
+_$directmode;
+_$nolog;
+
+_var {got} = _getargs;
+_var {CS_OUT} = "sub-{got}";
+_cout "T16a csub ran got={got}";
+_return "subret-{got}";

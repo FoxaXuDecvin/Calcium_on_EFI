@@ -1,0 +1,33 @@
+//This Config File is place all system & software global settings
+$GlobalSettings=true;
+
+
+//System global settings mode1
+//ModernApps Manager
+
+//If this switch is true. all modern app will be disabled!
+$DisableAllModernApps=false;
+//If this switch is true. all install / uninstall moapp request will be reject all!
+$DisableAllModernAppModify=false;
+
+//UMM Switch
+//No any options for Unifed Module Manager
+
+//Coral System Update Service
+$DisableCSU=false;
+//if 'true'. system update will not update
+$UpdateWithNoModernUpdate=false;
+$UpdateWithNoRecoveryUpdate=false;
+$UpdateWithNoDriverUpdate=false;
+
+//FileExplorer
+$USE_NUM_SELECT_FOLDER=0;
+
+//UserInterface
+$UseShellDoUserInterface=true;
+//only support rootshell / nativeshell
+$UserInterfaceShellType=nativeshell;
+
+
+//File Check API (Do not modify)
+$FILECHECK=true;

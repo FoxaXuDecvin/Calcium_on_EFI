@@ -1,0 +1,192 @@
+_$directmode;
+_$nolog;
+
+_cout "=== COMPAT START ===";
+
+_var {LN} = "0";
+:LPC;
+_var {LN} = _+("{LN}","1");
+_if(!_cp("{LN}","5"))|_goto :LPC;
+_cout "T00 loop n={LN}";
+
+_cout "-- A arithmetic --";
+_var {A1} = _+("7","5");
+_var {A2} = _-("7","5");
+_var {A3} = _*("7","5");
+_cout "T01 add={A1} sub={A2} mul={A3}";
+_var {A4} = _/("17","5");
+_var {A5} = _%("17","5");
+_var {A6} = _*("100000","100000");
+_cout "T02 div={A4} mod={A5} ovf={A6}";
+_var {A7} = _l%("36092757638322","2147483647");
+_var {A8} = _d*("16807","2147483646");
+_cout "T03 lmod={A7} dmul={A8}";
+_var {A9} = _f/("1","4");
+_var {A10} = _m_abs("-42");
+_cout "T04 fdiv={A9} abs={A10}";
+
+_cout "-- B compare --";
+_var {B1} = _<("3","5");
+_var {B2} = _=<("5","5");
+_var {B3} = _>("3","5");
+_var {B4} = _=>("4","5");
+_var {B5} = _cp("ab","ab");
+_var {B6} = _found("hello","ell");
+_cout "T05 lt={B1} le={B2} gt={B3} ge={B4} cp={B5} fd={B6}";
+
+_cout "-- C string --";
+_var {C1} = _string_fetch("hello","1");
+_var {C2} = _string_edit 1("hello","E");
+_var {C3} = _found("hello world","world");
+_cout "T06 fetch={C1} edit={C2} found={C3}";
+_var {C4} = "abcXdef";
+_var {C5} = _str_replace "{C4}" ("X","--");
+_cout "T07 srepl src={C4} ret={C5}";
+
+_cout "-- D time/system --";
+_var {D1} = _getdate;
+_var {D2} = _getclock;
+_var {D3} = _getfulltime;
+_cout "T08 date={D1} clock={D2}";
+_cout "T09 full={D3}";
+_var {D4} = _getrunid;
+_cout "T10 runid={D4}";
+_var {D6} = _sma "kvget";
+_var {D7} = _sma "clfmv";
+_var {D8} = _sma "getsys";
+_cout "T11 kvget={D6} clfmv={D7} getsys={D8}";
+
+_cout "-- E file read --";
+_var {E1} = _file_read ("script/compat/plain.txt","1");
+_var {E2} = _file_read ("script/compat/plain.txt","999");
+_var {E3} = _file_read ("script/compat/nosuch.txt","1");
+_cout "T12 r1={E1} rover={E2} rmiss={E3}";
+_var {E4} = _file_exist "script/compat/plain.txt";
+_var {E5} = _dir_exist "script/compat";
+_cout "T13 fex={E4} dex={E5}";
+
+_cout "-- F file write --";
+_file_del "script/compat/w.txt";
+_file_open "script/compat/w.txt";
+_file_write "line1";
+_file_open "script/compat/w.txt";
+_file_write "line2";
+_var {F1} = _file_read ("script/compat/w.txt","1");
+_var {F2} = _file_read ("script/compat/w.txt","2");
+_cout "T14 w1={F1} w2={F2}";
+
+_cout "-- G sipcfg --";
+_sipcfg.open "script/compat/t.cfg";
+_sipcfg ck1 = "v1";
+_var {G1} = _sipcfg ck1;
+_sipcfg ck1 = "v2";
+_var {G2} = _sipcfg ck1;
+_sipcfg.remove ck1;
+_var {G3} = _sipcfg ck1;
+_cout "T15 sip={G1} sip2={G2} sipgone={G3}";
+
+_cout "-- H typefile/textprint --";
+_var {TFV} = "TFVAL";
+_typefile "script/compat/tpl.txt";
+_cout "-- textprint --";
+_textprint "script/compat/plain.txt";
+
+_cout "-- I script call --";
+_var {SRET} = _script <"script/compat/csub.ca"> "arg1";
+_cout "T16 sret={SRET} sv={CS_OUT}";
+
+_cout "-- J loadlib --";
+_var {LRET} = _loadlib <"script/compat/compatlib.clib"> "::GetName";
+_cout "T17 lret={LRET}";
+
+_cout "-- K file_list --";
+_file_del "script/lst.txt";
+_file_list ("script/lst.txt","script/compat");
+_textprint "script/lst.txt";
+_cout "-- L dir_list --";
+_file_del "script/dmap.txt";
+_dir_list ("script/dmap.txt","script/compat");
+_textprint "script/dmap.txt";
+
+_cout "-- M cstp --";
+_dir_make "script/compat/pkg";
+_file_del "script/compat/pkg/a.txt";
+_file_open "script/compat/pkg/a.txt";
+_file_write "pkgfile";
+_file_del "script/compat/pack.cstp";
+_file_cstp ("script/compat/pkg","script/compat/pack.cstp");
+_cout "T18 cstp made";
+_dir_full "script/compat/unp";
+_$no_cstp_output;
+_file_uncstp ("script/compat/pack.cstp","script/compat/unp");
+_$open_cstp_output;
+_var {M1} = _file_exist "script/compat/unp/a.txt";
+_cout "T19 uncstp={M1}";
+
+_cout "-- N console --";
+_ms_sleep 100;
+_cout "T20 console done";
+
+_cout "-- O env snapshot --";
+_var {EV1} = "snapval";
+_envsave "script/compat/snap.txt";
+_var {EV1} = "changed";
+_cout "T21 ev-before={EV1}";
+_envload "script/compat/snap.txt";
+_cout "T22 ev-after={EV1}";
+
+_cout "-- P probe nonexistent --";
+_var {P1} = _strlen("abc");
+_cout "T23 nonexist={P1}";
+
+_cout "-- R file_list with subdir --";
+_dir_make "script/compat/zsub";
+_file_del "script/compat/zsub/z.txt";
+_file_open "script/compat/zsub/z.txt";
+_file_write "z";
+_file_del "script/lst2.txt";
+_file_list ("script/lst2.txt","script/compat");
+_textprint "script/lst2.txt";
+
+_cout "-- S file_list_all --";
+_file_del "script/fa.txt";
+_file_list_all ("script/fa.txt","script/compat");
+_textprint "script/fa.txt";
+
+_cout "-- T copy rename compare --";
+_file_del "script/compat/c1.txt";
+_file_copy ("script/compat/plain.txt","script/compat/c1.txt");
+_var {T1} = _file_cp ("script/compat/plain.txt","script/compat/c1.txt");
+_cout "T25 copy-cmp={T1}";
+_file_del "script/compat/r1.txt";
+_file_rename ("script/compat/c1.txt","script/compat/r1.txt");
+_var {T2} = _file_read ("script/compat/r1.txt","2");
+_cout "T26 renamed-read={T2}";
+
+_cout "-- U file_replace --";
+_file_del "script/compat/rep.txt";
+_file_open "script/compat/rep.txt";
+_file_write "AAA-BBB-AAA";
+_file_replace "script/compat/rep.txt" ("AAA","ZZ");
+_var {U1} = _file_read ("script/compat/rep.txt","1");
+_cout "T27 replace={U1}";
+
+_cout "-- V utf8 typefile --";
+_typefile "script/compat/u8.txt";
+
+_cout "-- W dir_remove nonempty --";
+_dir_make "script/compat/gone";
+_file_del "script/compat/gone/g.txt";
+_file_open "script/compat/gone/g.txt";
+_file_write "g";
+_dir_remove "script/compat/gone";
+_var {W1} = _dir_exist "script/compat/gone";
+_cout "T28 rmdir-exists={W1}";
+
+_cout "-- X getargs --";
+_var {X1} = _getargs;
+_cout "T29 args=[{X1}]";
+
+_cout "=== COMPAT END ===";
+
+_return "ok";

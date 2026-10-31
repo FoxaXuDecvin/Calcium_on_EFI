@@ -1,0 +1,97 @@
+// ============================================================================
+//  <iostream> 影子实现
+//  只服务 Calcium 的实际用法：cout/cerr << 各种值 << endl
+//  所有 operator<< 放在 namespace efi（靠 ADL 找到，不必污染 std）
+// ============================================================================
+#pragma once
+
+#include <iosfwd>
+#include <string>
+#include <type_traits>
+#include "efi_shim_common.h"
+
+namespace efi {
+
+// ---------------------------------------------------------------- 输出
+inline basic_stream &operator<<(basic_stream &s, const std::string &v)
+{
+    s.write(v.data(), v.size());
+    return s;
+}
+
+inline basic_stream &operator<<(basic_stream &s, const char *v)
+{
+    if (v) {
+        size_t n = 0;
+        while (v[n]) ++n;
+        s.write(v, n);
+    }
+    return s;
+}
+
+inline basic_stream &operator<<(basic_stream &s, char v) { s.put(v); return s; }
+
+inline basic_stream &operator<<(basic_stream &s, bool v) { s.put(v ? '1' : '0'); return s; }
+
+inline basic_stream &operator<<(basic_stream &s, unsigned long long v)
+{
+    char b[24];
+    int n = 0;
+    if (!v) b[n++] = '0';
+    while (v) { b[n++] = (char)('0' + (int)(v % 10)); v /= 10; }
+    while (n) s.put(b[--n]);
+    return s;
+}
+
+inline basic_stream &operator<<(basic_stream &s, long long v)
+{
+    if (v < 0) {
+        s.put('-');
+        return s << (unsigned long long)(0ULL - (unsigned long long)v);
+    }
+    return s << (unsigned long long)v;
+}
+
+// 其余整型（int/short/long/unsigned...）统一走这里
+template <class T,
+          std::enable_if_t<std::is_integral<T>::value
+                           && !std::is_same<T, char>::value
+                           && !std::is_same<T, bool>::value
+                           && !std::is_same<T, long long>::value
+                           && !std::is_same<T, unsigned long long>::value, int> = 0>
+inline basic_stream &operator<<(basic_stream &s, T v)
+{
+    if constexpr (std::is_signed<T>::value)
+        return s << (long long)v;
+    else
+        return s << (unsigned long long)v;
+}
+
+// ---------------------------------------------------------------- 输入
+// 只用得到一个操作：读一行。做成空类型，靠 ADL 找 getline。
+struct console_in {};
+
+inline bool getline(console_in &, std::string &s) { return read_line(s); }
+
+// ---------------------------------------------------------------- 操纵符
+inline basic_stream &endl(basic_stream &s) { s.put('\n'); s.flush(); return s; }
+inline basic_stream &flush(basic_stream &s) { s.flush(); return s; }
+inline basic_stream &ends(basic_stream &s) { s.put('\0'); return s; }
+
+inline basic_stream &operator<<(basic_stream &s, basic_stream &(*m)(basic_stream &)) { return m(s); }
+
+} // namespace efi
+
+namespace std {
+
+using efi::endl;
+using efi::flush;
+using efi::ends;
+
+// 常量初始化，不产生全局构造器
+inline efi::basic_stream cout(nullptr, &efi::console_sink);
+inline efi::basic_stream cerr(nullptr, &efi::console_sink);
+inline efi::basic_stream clog(nullptr, &efi::console_sink);
+inline efi::console_in   cin;
+
+} // namespace std
