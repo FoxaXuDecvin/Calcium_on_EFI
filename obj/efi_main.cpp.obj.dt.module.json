@@ -1,0 +1,14 @@
+{
+    "version": 1,
+    "revision": 0,
+    "rules": [
+        {
+            "primary-output": "E:\\TEMP\\efi_port\\obj\\efi_main.obj",
+            "outputs": [
+                "E:\\TEMP\\efi_port\\obj\\efi_main.cpp.obj.dt.module.json",
+                "E:\\TEMP\\efi_port\\obj\\efi_main.cpp.obj.dt.d.json"
+            ],
+            "requires": []
+        }
+    ]
+}

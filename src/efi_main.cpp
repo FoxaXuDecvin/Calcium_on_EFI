@@ -2,6 +2,7 @@
 //  efi_main.cpp —— UEFI 入口：初始化固件环境 → 跑全局构造器 → 组装 argv → 调 main()
 // ============================================================================
 #include "efi_core.h"
+#include "efi_bootname.h"
 
 extern "C" int main(int argc, char *argv[]);
 void efi_run_initializers();
@@ -111,8 +112,38 @@ extern "C" EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *S
     gRT = SystemTable->RuntimeServices;
     gImageHandle = ImageHandle;
 
+    // ---------------------------------------------------------------- 关看门狗
+    // 固件（AMI/Insyde 常见默认 5 分钟）在 POST 时武装了看门狗定时器，
+    // 一旦到时无人喂狗就 ResetSystem(EfiResetCold) —— 表现为"跑几分钟后自己重启"。
+    // 从 UEFI Shell 里起程序时 Shell 已经关过它，所以只在"固件直接启动
+    // BOOTX64.EFI"时才会踩到。
+    //
+    // BootServices.SetWatchdogTimer 只有 4 个参数（没有 TimerType），语义：
+    //   Timeout == 0  -> 彻底停用定时器（UEFI 规范 / EDK2 实现均如此）
+    //   Timeout != 0  -> 重新武装，单位秒（不是"在剩余时间上叠加"）
+    // 所以下面这一句是"关掉"，不是"延长"。
+    EFI_STATUS wdStatus = 0xFFFFFFFFFFFFFFFFULL;   // 哨兵：服务不存在
+    if (gBS && gBS->SetWatchdogTimer) {
+        typedef EFI_STATUS (EFIAPI *SET_WATCHDOG_T)(UINTN, UINT64, UINTN, CHAR16 *);
+        SET_WATCHDOG_T setWd = (SET_WATCHDOG_T)gBS->SetWatchdogTimer;
+        wdStatus = setWd(0, 0, 0, 0);
+        if (EFI_ERROR(wdStatus)) {
+            // 极少数固件把 Timeout=0 当非法参数，退而求其次设成极大值
+            // （0xFFFFFFFF 秒 ≈ 136 年），效果等同于关闭。
+            wdStatus = setWd((UINTN)0xFFFFFFFFu, 0, 0, 0);
+        }
+    }
+
     eficon::Init();
     eficon::Clear();
+
+    // 把固件的真实答复打到屏幕/串口，避免"以为关了其实没关"
+    if (!gBS || !gBS->SetWatchdogTimer)
+        eficon::WriteAscii("[Calcium-EFI] watchdog: service not present\n");
+    else if (EFI_ERROR(wdStatus))
+        eficon::WriteAscii("[Calcium-EFI] watchdog: disable FAILED (firmware rejected)\n");
+    else
+        eficon::WriteAscii("[Calcium-EFI] watchdog: disabled\n");
 
     if (!efifs::Init()) {
         eficon::WriteAscii("[Calcium-EFI] Cannot mount file system volume.\n");
@@ -121,6 +152,28 @@ extern "C" EFI_STATUS EFIAPI EfiMain(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *S
 
     // 无人值守测试：卷根 autoinput.txt 里的每行依次当作键盘输入
     eficon::LoadAutoInput("autoinput.txt");
+
+    // ------------------------------------------------------- 自定义启动项名字
+    // 固件（EDK2 系 BDS）对可移动介质上的 \EFI\BOOT\BOOTX64.EFI 会临时合成一个
+    // 描述为 "UEFI OS" 的启动项 —— 字符串硬编码在固件里，且不写 NVRAM，
+    // 所以改我们自己的 .efi 是改不掉的。要拿到自定义名字，只能在 NVRAM 里
+    // 建一条 Boot#### 持久项，Description 由我们填。
+    // 触发：卷根 setbootname.txt（内容 = 新名字，取第一行）
+    //       卷根 setbootname.on （用默认名 "Coral OS Based on Calcium"）
+    {
+        char *cfg = 0;
+        unsigned int cfgLen = 0;
+        if (efifs::ReadAll("setbootname.txt", cfg, cfgLen) && cfgLen > 0 && cfg) {
+            char name[80];
+            unsigned int k = 0;
+            while (k < cfgLen && k < 78 && cfg[k] != '\r' && cfg[k] != '\n') { name[k] = cfg[k]; ++k; }
+            name[k] = 0;
+            efifs::FreeBuf(cfg);
+            if (k > 0) efi_bootname::Register(name);
+        } else if (efifs::Exists("setbootname.on")) {
+            efi_bootname::Register("Coral OS Based on Calcium");
+        }
+    }
 
     // ---------------------------------------------------------------- 网络探针
     // 诊断工具：卷根放 netprobe.on 才启用。枚举固件所有句柄的全部协议 GUID，

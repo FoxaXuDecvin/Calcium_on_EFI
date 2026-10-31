@@ -1,0 +1,12 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "e:\\temp\\efi_port\\src\\efi_main.cpp",
+        "ProvidedModule": "",
+        "Includes": [
+            "e:\\temp\\efi_port\\src\\efi_core.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}
